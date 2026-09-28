@@ -1,0 +1,19 @@
+# CLion / JetBrains
+.idea/
+
+# CMake build directories
+cmake-build-*/
+build/
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.out
+*.exe
+
+# macOS
+.DS_Store
+
+# VS Code (ak by si niekedy otvoril projekt aj tam)
+.vscode/
