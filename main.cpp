@@ -7,6 +7,8 @@
 #include <chrono>
 #include <thread>
 #include <fstream>
+#include <format>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -347,7 +349,7 @@ int main() {
 
     while (running) {
         std::cout << "\033[1;32m" << fs::current_path() << "\033[1;33m $ \033[0m";
-        std::getline(std::cin, input);
+        if (!std::getline(std::cin, input)) break;
         if (input.empty()) continue;
 
         std::istringstream ss(input);
