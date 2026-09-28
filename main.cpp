@@ -110,12 +110,49 @@ int main() {
             return;
         }
 
-        if (std::error_code ec; fs::remove(target, ec)) {
+        std::error_code ec;
+
+        if (fs::remove(target, ec)) {
             std::cout << "\033[1;32m[OK] Item successfully removed!\033[0m\n";
         } else if (ec) {
             std::cout << "\033[1;31m[ERROR] Failed to remove item: " << ec.message() << "\033[0m\n";
         } else {
             std::cout << "\033[1;31m[ERROR] Target item was not found!\033[0m\n";
+        }
+
+        if (ec) {
+            std::cout << "\033[1;31m[ERROR] touch failed: " << ec.message() << "\033[0m\n";
+        } else {
+            std::cout << "\033[1;32m[OK] File touched successfully!\033[0m\n";
+        }
+    });
+
+    cmd.registerCommand("touch", [](std::istringstream& args) {
+        std::string fileName;
+        args >> fileName;
+
+        if (fileName.empty()) {
+            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
+            return;
+        }
+
+        std::error_code ec;
+
+        if (fs::exists(fileName, ec)) {
+            fs::last_write_time(fileName, fs::file_time_type::clock::now(), ec);
+        } else {
+            std::ofstream file(fileName);
+
+            if (!file) {
+                std::cout << "\033[1;31m[ERROR] Failed to create file: " << fileName << "\033[0m\n";
+                return;
+            }
+        }
+
+        if (ec) {
+            std::cout << "\033[1;31m[ERROR] touch failed: " << ec.message() << "\033[0m\n";
+        } else {
+            std::cout << "\033[1;32m[OK] File touched successfully!\033[0m\n";
         }
     });
 
@@ -263,7 +300,8 @@ int main() {
         std::cout << "  find <name>              - Search files by name recursively\n";
         std::cout << "  secret                   - Secret command\n";
         std::cout << "  exit                     - Exit the application\n";
-        std::cout << "  tree                     - List all directories and subdirectories in a tree\n";
+        std::cout << "  tree                     - Show directories and files as a tree\n";
+        std::cout << "  touch <file_name>        - Create an empty file or update its last write time\n";
         std::cout << "\033[1;33m==========================\033[0m\n\n";
     });
 
