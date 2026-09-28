@@ -299,6 +299,51 @@ int main() {
                     << charCount << " chars\033[0m\n";
     });
 
+    cmd.registerCommand("echo", [](std::istringstream& args) {
+        std::string rest;
+        std::getline(args, rest);
+
+        auto trim = [](std::string& s) {
+            const size_t start = s.find_first_not_of(" \t");
+            const size_t end = s.find_last_not_of(" \t");
+            s = (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+        };
+
+        bool append = false;
+        size_t pos = rest.find(">>");
+
+        if (pos != std::string::npos) {
+            append = true;
+        } else {
+            pos = rest.find('>');
+        }
+
+        if (pos == std::string::npos) {
+            trim(rest);
+            std::cout << rest << "\n";
+            return;
+        }
+
+        std::string text = rest.substr(0, pos);
+        std::string fileName = rest.substr(pos + (append ? 2 : 1));
+        trim(text);
+        trim(fileName);
+
+        if (fileName.empty()) {
+            std::cout << "\033[1;31m[ERROR] Usage: echo <text> > <file>\033[0m\n";
+            return;
+        }
+
+        std::ofstream file(fileName, append ? std::ios::app : std::ios::trunc);
+
+        if (!file) {
+            std::cout << "\033[1;31m[ERROR] Could not open file: " << fileName << "\033[0m\n";
+            return;
+        }
+
+        file << text << "\n";
+    });
+
     cmd.registerCommand("pwd", [](std::istringstream&) {
         std::cout << "\033[1;36m" << fs::current_path() << "\033[0m\n";
     });
@@ -323,6 +368,7 @@ int main() {
         std::cout << "  rm <name>                - Remove file or directory\n";
         std::cout << "  cp <src> <dest>          - Copy file or directory\n";
         std::cout << "  cat <file_name>          - Display file contents\n";
+        std::cout << "  echo <text> [>/>> <file>] - Print text or redirect to a file\n";
         std::cout << "  grep <pattern> <file>    - Search text pattern in file\n";
         std::cout << "  find <name>              - Search files by name recursively\n";
         std::cout << "  tree                     - Show directories and files as a tree\n";
