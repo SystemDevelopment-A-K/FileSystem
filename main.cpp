@@ -79,8 +79,10 @@ int main() {
 
         if (std::error_code ec; fs::create_directory(folderName, ec)) {
             std::cout << "\033[1;32m[OK] Directory successfully created!\033[0m\n";
-        } else {
+        } else if (ec) {
             std::cout << "\033[1;31m[ERROR] Directory creation failed: " << ec.message() << "\033[0m\n";
+        } else {
+            std::cout << "\033[1;31m[ERROR] Directory already exists!\033[0m\n";
         }
     });
 
@@ -110,20 +112,12 @@ int main() {
             return;
         }
 
-        std::error_code ec;
-
-        if (fs::remove(target, ec)) {
+        if (std::error_code ec; fs::remove(target, ec)) {
             std::cout << "\033[1;32m[OK] Item successfully removed!\033[0m\n";
         } else if (ec) {
             std::cout << "\033[1;31m[ERROR] Failed to remove item: " << ec.message() << "\033[0m\n";
         } else {
             std::cout << "\033[1;31m[ERROR] Target item was not found!\033[0m\n";
-        }
-
-        if (ec) {
-            std::cout << "\033[1;31m[ERROR] touch failed: " << ec.message() << "\033[0m\n";
-        } else {
-            std::cout << "\033[1;32m[OK] File touched successfully!\033[0m\n";
         }
     });
 
@@ -233,7 +227,7 @@ int main() {
             return;
         }
 
-        for (const auto& entry : fs::recursive_directory_iterator(fs::current_path())) {
+        for (const auto& entry : fs::recursive_directory_iterator(fs::current_path(), fs::directory_options::skip_permission_denied)) {
             if (entry.path().filename().string().find(search) != std::string::npos) {
                 std::cout << "\033[1;36m" << entry.path() << "\033[0m\n";
             }
@@ -268,8 +262,39 @@ int main() {
         printTree(fs::current_path(), "");
     });
 
-    cmd.registerCommand("list", [](std::istringstream&) {
+    cmd.registerCommand("wc", [](std::istringstream& args) {
+        std::string fileName;
+        args >> fileName;
 
+        if (fileName.empty()) {
+            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
+            return;
+        }
+
+        std::ifstream file(fileName);
+
+        if (!file) {
+            std::cout << "\033[1;31m[ERROR] Could not open file: " << fileName << "\033[0m\n";
+            return;
+        }
+
+        std::string line;
+        size_t lineCount = 0, wordCount = 0, charCount = 0;
+
+        while (std::getline(file, line)) {
+            lineCount++;
+            charCount += line.size() + 1;
+
+            std::istringstream words(line);
+            std::string word;
+            while (words >> word) {
+                wordCount++;
+            }
+        }
+
+        std::cout << "\033[1;36m" << lineCount << " lines, "
+                    << wordCount << " words, "
+                    << charCount << " chars\033[0m\n";
     });
 
     cmd.registerCommand("pwd", [](std::istringstream&) {
@@ -298,10 +323,11 @@ int main() {
         std::cout << "  cat <file_name>          - Display file contents\n";
         std::cout << "  grep <pattern> <file>    - Search text pattern in file\n";
         std::cout << "  find <name>              - Search files by name recursively\n";
-        std::cout << "  secret                   - Secret command\n";
-        std::cout << "  exit                     - Exit the application\n";
         std::cout << "  tree                     - Show directories and files as a tree\n";
         std::cout << "  touch <file_name>        - Create an empty file or update its last write time\n";
+        std::cout << "  wc <file_name>           - Count the number of lines, words and characters in a file\n";
+        std::cout << "  secret                   - Secret command\n";
+        std::cout << "  exit                     - Exit the application\n";
         std::cout << "\033[1;33m==========================\033[0m\n\n";
     });
 
@@ -328,7 +354,11 @@ int main() {
         std::string command;
         ss >> command;
 
-        cmd.execute(command, ss);
+        try {
+            cmd.execute(command, ss);
+        } catch (std::exception& e) {
+            std::cout << "\033[1;31m[ERROR] " << e.what() << "\033[0m\n";
+        }
     }
 
     return 0;
