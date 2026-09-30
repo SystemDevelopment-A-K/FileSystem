@@ -73,6 +73,7 @@ namespace {
 
         static std::optional<std::string> readArguments(std::istringstream& args, const std::string& errorMessage) {
             std::string value;
+
             if (!(args >> value)) {
                 printError(errorMessage);
                 return std::nullopt;
@@ -80,8 +81,25 @@ namespace {
             return value;
         }
 
+        static std::optional<std::ifstream> openFileStream(std::istringstream& args) {
+            const auto fileName = readArguments(args, "You forgot to specify file name!");
+            if (!fileName) return std::nullopt;
+
+            std::ifstream file(*fileName);
+
+            if (!file) {
+                printError("Could not open file: " + *fileName);
+                return std::nullopt;
+            }
+            return file;
+        }
+
+        static std::string_view entryColor(const fs::directory_entry& entry) {
+            return entry.is_directory() ? color::magenta : color::blue;
+        }
+
         static std::string permissionsToString(fs::perms p) {
-            auto bit = [p](const fs::perms flag, char c) {
+            auto bit = [p](const fs::perms flag, const char c) {
                 return (p & flag) != fs::perms::none ? c : '-';
             };
 
@@ -127,7 +145,7 @@ int main() {
     cmd.registerCommand("ls", [](std::istringstream&) {
         for (const auto& entry : fs::directory_iterator(fs::current_path())) {
             const bool isDir = entry.is_directory();
-            const std::string_view nameColor = isDir ? color::magenta : color::blue;
+            const std::string_view nameColor = CommandManager::entryColor(entry);
 
             std::cout << nameColor << (isDir ? "[DIR]  " : "[FILE] ")
                         << entry.path().filename().string() << color::reset;
@@ -212,21 +230,11 @@ int main() {
     });
 
     cmd.registerCommand("cat", [](std::istringstream& args) {
-        const auto result = CommandManager::readArguments(args, "You forgot to specify file name!");
-
-        if (!result) return;
-
-        const std::string& fileName = *result;
-
-        std::ifstream file(fileName);
-
-        if (!file) {
-            CommandManager::printError("Could not open file: " + fileName);
-            return;
-        }
+        auto file = CommandManager::openFileStream(args);
+        if (!file) return;
 
         std::string line;
-        while (std::getline(file, line)) {
+        while (std::getline(*file, line)) {
             std::cout << line << "\n";
         }
     });
@@ -235,19 +243,13 @@ int main() {
         const auto pattern = CommandManager::readArguments(args, "Usage: grep <pattern> <file>");
         if (!pattern) return;
 
-        const auto fileName = CommandManager::readArguments(args, "Usage: grep <pattern> <file>");
-        if (!fileName) return;
-
-        std::ifstream file(*fileName);
-        if (!file) {
-            CommandManager::printError("Could not open file: " + *fileName);
-            return;
-        }
+        auto file = CommandManager::openFileStream(args);
+        if (!file) return;
 
         std::string line;
         int lineNumber = 0;
 
-        while (std::getline(file, line)) {
+        while (std::getline(*file, line)) {
             lineNumber++;
             if (line.find(*pattern) != std::string::npos) {
                 std::cout << color::gray << lineNumber << ": " << color::reset;
@@ -294,11 +296,13 @@ int main() {
                 entries.push_back(entry);
             }
 
+            std::ranges::sort(entries, {}, [](const auto& e) { return e.path().filename(); });
+
             for (size_t i = 0; i < entries.size(); ++i) {
                 const bool isLast = i == entries.size() - 1;
                 const auto& entry = entries[i];
 
-                const std::string_view nameColor = entry.is_directory() ? color::magenta : color::blue;
+                const std::string_view nameColor = CommandManager::entryColor(entry);
 
                 std::cout << color::gray << prefix << (isLast ? "└── " : "├── ") << color::reset
                             << nameColor << entry.path().filename().string() << color::reset << "\n";
@@ -314,23 +318,13 @@ int main() {
     });
 
     cmd.registerCommand("wc", [](std::istringstream& args) {
-        const auto result = CommandManager::readArguments(args, "You forgot to specify file name!");
-
-        if (!result) return;
-
-        const std::string& fileName = *result;
-
-        std::ifstream file(fileName);
-
-        if (!file) {
-            CommandManager::printError("Could not open file: " + fileName);
-            return;
-        }
+        auto file = CommandManager::openFileStream(args);
+        if (!file) return;
 
         std::string line;
         size_t lineCount = 0, wordCount = 0, charCount = 0;
 
-        while (std::getline(file, line)) {
+        while (std::getline(*file, line)) {
             lineCount++;
             charCount += line.size() + 1;
 
@@ -480,11 +474,12 @@ int main() {
     while (running) {
         std::cout << color::green << fs::current_path().string() << color::yellow << " $ " << color::reset;
         if (!std::getline(std::cin, input)) break;
-        if (input.empty()) continue;
 
         std::istringstream ss(input);
         std::string command;
         ss >> command;
+
+        if (command.empty()) continue;
 
         try {
             cmd.execute(command, ss);

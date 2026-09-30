@@ -1,6 +1,6 @@
 # 📁 FileSystem
 
-**Version:** 1.0.4  
+**Version:** 1.1.2  
 **Author:** Alex Káčerík  
 **Description:** A colorful command-line file system shell built with C++.
 
