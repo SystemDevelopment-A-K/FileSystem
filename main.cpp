@@ -9,10 +9,24 @@
 #include <fstream>
 #include <format>
 #include <vector>
+#include <string_view>
+#include <optional>
+#include <utility>
 
 namespace fs = std::filesystem;
 
 namespace {
+    namespace color {
+        constexpr std::string_view reset = "\033[0m";
+        constexpr std::string_view red = "\033[1;31m";
+        constexpr std::string_view green = "\033[1;32m";
+        constexpr std::string_view yellow = "\033[1;33m";
+        constexpr std::string_view blue = "\033[1;34m";
+        constexpr std::string_view magenta = "\033[1;35m";
+        constexpr std::string_view cyan = "\033[1;36m";
+        constexpr std::string_view gray = "\033[90m";
+    }
+
     class CommandManager {
     public:
         using CommandFunc = std::function<void(std::istringstream&)>;
@@ -25,7 +39,7 @@ namespace {
             const auto it = commands.find(name);
 
             if (it == commands.end()) {
-                std::cout << "\033[1;31m[ERROR] Unknown command: " << name << "\033[0m\n";
+                printError("Unknown command: " + name);
                 return false;
             }
             it->second(input);
@@ -45,12 +59,16 @@ namespace {
             std::cout << line.substr(pos) << "\n";
         }
 
-        static void printError(const std::string& message) {
-            std::cout << "\033[1;31m[ERROR] " << message << "\033[0m\n";
+        static void printError(const std::string& msg) {
+            std::cout << color::red << "[ERROR] " << msg << color::reset << "\n";
         }
 
         static void printSuccess(const std::string& msg) {
-            std::cout << "\033[1;32m[SUCCESS] " << msg << "\033[0m\n";
+            std::cout << color::green << "[OK] " << msg << color::reset << "\n";
+        }
+
+        static void printInfo(const std::string& msg) {
+            std::cout << color::cyan << msg << color::reset << "\n";
         }
 
         static std::optional<std::string> readArguments(std::istringstream& args, const std::string& errorMessage) {
@@ -80,6 +98,22 @@ namespace {
             result += bit(fs::perms::others_read,  'r');
             result += bit(fs::perms::others_write, 'w');
             result += bit(fs::perms::others_exec,  'x');
+
+            return result;
+        }
+
+        static std::string fileTypeToString(const fs::file_type type) {
+            switch (type) {
+                case fs::file_type::regular: return "regular file";
+                case fs::file_type::directory: return "directory";
+                case fs::file_type::symlink: return "symlink";
+                case fs::file_type::block: return "block device";
+                case fs::file_type::character: return "character device";
+                case fs::file_type::fifo: return "fifo";
+                case fs::file_type::socket: return "socket";
+                case fs::file_type::not_found: return "not found";
+                default: return "unknown";
+            }
         }
     private:
         std::unordered_map<std::string, CommandFunc> commands;
@@ -92,18 +126,18 @@ int main() {
 
     cmd.registerCommand("ls", [](std::istringstream&) {
         for (const auto& entry : fs::directory_iterator(fs::current_path())) {
-            std::string nameColor = entry.is_directory() ? "\033[1;35m" : "\033[1;34m";
-            std::string type = entry.is_directory() ? "[DIR] " : "[FILE] ";
-            std::string reset = "\033[0m";
-            std::string gray = "\033[90m";
+            const bool isDir = entry.is_directory();
+            const std::string_view nameColor = isDir ? color::magenta : color::blue;
 
-            std::cout << nameColor << type << ": " << entry.path().filename().string() << reset;
+            std::cout << nameColor << (isDir ? "[DIR]  " : "[FILE] ")
+                        << entry.path().filename().string() << color::reset;
 
             if (entry.is_regular_file()) {
-                std::cout << gray << " (" << entry.file_size() << " bytes)" << reset;
+                std::cout << color::gray << " (" << entry.file_size() << " bytes)" << color::reset;
             }
 
-            std::cout << gray << " [" << std::format("{:%Y-%m-%d %H:%M}", entry.last_write_time()) << "]" << reset << "\n";
+            std::cout << color::gray << " [" << std::format("{:%Y-%m-%d %H:%M}", entry.last_write_time()) << "]"
+                        << color::reset << "\n";
         }
     });
 
@@ -113,28 +147,24 @@ int main() {
         if (!folderName) return;
 
         if (std::error_code ec; fs::create_directory(*folderName, ec)) {
-            std::cout << "\033[1;32m[OK] Directory successfully created!\033[0m\n";
+            CommandManager::printSuccess("Directory successfully created!");
         } else if (ec) {
-            std::cout << "\033[1;31m[ERROR] Directory creation failed: " << ec.message() << "\033[0m\n";
+            CommandManager::printError("Directory creation failed: " + ec.message());
         } else {
-            std::cout << "\033[1;31m[ERROR] Directory already exists!\033[0m\n";
+            CommandManager::printError("Directory already exists!");
         }
     });
 
     cmd.registerCommand("cd", [](std::istringstream& args) {
-        std::string path;
-        args >> path;
+        const auto optional = CommandManager::readArguments(args, "You forgot to specify directory name!");
 
-        if (path.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify directory name!\033[0m\n";
-            return;
-        }
+        if (!optional) return;
 
         std::error_code ec;
-        fs::current_path(path, ec);
+        fs::current_path(*optional, ec);
 
         if (ec) {
-            std::cout << "\033[1;31m[ERROR] Failed to change directory: " << ec.message() << "\033[0m\n";
+            CommandManager::printError("Failed to change directory: " + ec.message());
         }
     });
 
@@ -371,6 +401,22 @@ int main() {
             CommandManager::printError("File doesn't exist: " + path);
             return;
         }
+
+        std::error_code ec;
+
+        const auto status = fs::status(path, ec);
+
+        std::cout << "\033[1;36m";
+        std::cout << "Path:        " << fs::absolute(path).string() << "\n";
+        std::cout << "Type:        " << CommandManager::fileTypeToString(status.type()) << "\n";
+
+        if (fs::is_regular_file(status)) {
+            std::cout << "Size:        " << fs::file_size(path, ec) << " bytes\n";
+        }
+
+        std::cout << "Permissions: " << CommandManager::permissionsToString(status.permissions()) << "\n";
+        std::cout << "Modified:    " << std::format("{:%Y-%m-%d %H:%M:%S}", fs::last_write_time(path, ec)) << "\n";
+        std::cout << "\033[0m";
     });
 
     cmd.registerCommand("pwd", [](std::istringstream&) {
