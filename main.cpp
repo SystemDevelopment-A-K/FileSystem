@@ -428,22 +428,22 @@ int main() {
 
     cmd.registerCommand("help", [](std::istringstream&) {
         const std::vector<std::pair<std::string_view, std::string_view>> commands = {
-            {"ls",                        "List contents of current directory"},
-            {"pwd",                       "Print working directory path"},
-            {"cd <path>",                 "Change current directory"},
-            {"mkdir <dir_name>",          "Create a new directory"},
-            {"rm <name>",                 "Remove file or directory"},
-            {"cp <src> <dest>",           "Copy file or directory"},
-            {"cat <file_name>",           "Display file contents"},
+            {"ls", "List contents of current directory"},
+            {"pwd", "Print working directory path"},
+            {"cd <path>", "Change current directory"},
+            {"mkdir <dir_name>", "Create a new directory"},
+            {"rm <name>", "Remove file or directory"},
+            {"cp <src> <dest>", "Copy file or directory"},
+            {"cat <file_name>", "Display file contents"},
             {"echo <text> [>/>> <file>]", "Print text or redirect to a file"},
-            {"grep <pattern> <file>",     "Search text pattern in file"},
-            {"find <name>",               "Search files by name recursively"},
-            {"tree",                      "Show directories and files as a tree"},
-            {"touch <file_name>",         "Create an empty file or update its last write time"},
-            {"wc <file_name>",            "Count lines, words and characters in a file"},
-            {"stat <path>",               "Show type, size, permissions and last modification time"},
-            {"secret",                    "Secret command"},
-            {"exit",                      "Exit the application"},
+            {"grep <pattern> <file>", "Search text pattern in file"},
+            {"find <name>", "Search files by name recursively"},
+            {"tree", "Show directories and files as a tree"},
+            {"touch <file_name>", "Create an empty file or update its last write time"},
+            {"wc <file_name>", "Count lines, words and characters in a file"},
+            {"stat <path>", "Show type, size, permissions and last modification time"},
+            {"secret", "Secret command"},
+            {"exit", "Exit the application"},
         };
 
         std::cout << "\n" << color::yellow << "=== Available commands ===" << color::reset << "\n";
