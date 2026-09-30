@@ -174,11 +174,11 @@ int main() {
         if (!target) return;
 
         if (std::error_code ec; fs::remove(*target, ec)) {
-            std::cout << "\033[1;32m[OK] Item successfully removed!\033[0m\n";
+            CommandManager::printSuccess("Item successfully removed!");
         } else if (ec) {
-            std::cout << "\033[1;31m[ERROR] Failed to remove item: " << ec.message() << "\033[0m\n";
+            CommandManager::printError("Failed to remove item: " + ec.message());
         } else {
-            std::cout << "\033[1;31m[ERROR] Target item was not found!\033[0m\n";
+            CommandManager::printError("Target item was not found!");
         }
     });
 
@@ -192,17 +192,15 @@ int main() {
 
         if (fs::exists(fileName, ec)) {
             fs::last_write_time(fileName, fs::file_time_type::clock::now(), ec);
-        } else {
-            if (const std::ofstream file(fileName); !file) {
-                std::cout << "\033[1;31m[ERROR] Failed to create file: " << fileName << "\033[0m\n";
-                return;
-            }
+        } else if (const std::ofstream file(fileName); !file) {
+            CommandManager::printError("Failed to create file: " + fileName);
+            return;
         }
 
         if (ec) {
-            std::cout << "\033[1;31m[ERROR] touch failed: " << ec.message() << "\033[0m\n";
+            CommandManager::printError("touch failed: " + ec.message());
         } else {
-            std::cout << "\033[1;32m[OK] File touched successfully!\033[0m\n";
+            CommandManager::printSuccess("File touched successfully!");
         }
     });
 
@@ -254,31 +252,29 @@ int main() {
     });
 
     cmd.registerCommand("cp", [](std::istringstream& args) {
-        std::string source, destination;
-        args >> source >> destination;
+        const auto source = CommandManager::readArguments(args, "Usage: cp <source> <destination>");
+        if (!source) return;
 
-        if (source.empty() || destination.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify source or destination!\033[0m\n";
-            return;
-        }
+        const auto destination = CommandManager::readArguments(args, "Usage: cp <source> <destination>");
+        if (!destination) return;
 
         std::error_code ec;
-        fs::copy(source, destination, fs::copy_options::overwrite_existing, ec);
+        fs::copy(*source, *destination, fs::copy_options::overwrite_existing, ec);
 
         if (ec) {
-            std::cout << "\033[1;31m[ERROR] Failed to copy: " << ec.message() << "\033[0m\n";
+            CommandManager::printError("Failed to copy: " + ec.message());
         } else {
-            std::cout << "\033[1;32m[OK] Item copied successfully!\033[0m\n";
+            CommandManager::printSuccess("Item copied successfully!");
         }
     });
 
     cmd.registerCommand("find", [](std::istringstream& args) {
-        const auto optional = CommandManager::readArguments(args, "You forgot to specify search query!");
+        const auto search = CommandManager::readArguments(args, "You forgot to specify search query!");
 
-        if (!optional) return;
+        if (!search) return;
 
         for (const auto& entry : fs::recursive_directory_iterator(fs::current_path(), fs::directory_options::skip_permission_denied)) {
-            if (entry.path().filename().string().find(*optional) != std::string::npos) {
+            if (entry.path().filename().string().find(*search) != std::string::npos) {
                 std::cout << "\033[1;36m" << entry.path() << "\033[0m\n";
             }
         }
@@ -297,10 +293,10 @@ int main() {
                 const bool isLast = i == entries.size() - 1;
                 const auto& entry = entries[i];
 
-                std::string nameColor = entry.is_directory() ? "\033[1;35m" : "\033[1;34m";
+                const std::string_view nameColor = entry.is_directory() ? color::magenta : color::blue;
 
-                std::cout << "\033[90m" << prefix << (isLast ? "└── " : "├── ") << "\033[0m"
-                            << nameColor << entry.path().filename().string() << "\033[0m\n";
+                std::cout << color::gray << prefix << (isLast ? "└── " : "├── ") << color::reset
+                            << nameColor << entry.path().filename().string() << color::reset << "\n";
 
                 if (entry.is_directory()) {
                     std::string newPrefix = prefix + (isLast ? "    " : "│   ");
@@ -340,9 +336,7 @@ int main() {
             }
         }
 
-        std::cout << "\033[1;36m" << lineCount << " lines, "
-                    << wordCount << " words, "
-                    << charCount << " chars\033[0m\n";
+        CommandManager::printInfo(std::format("{} lines, {} words, {} chars", lineCount, wordCount, charCount));
     });
 
     cmd.registerCommand("echo", [](std::istringstream& args) {
@@ -376,14 +370,14 @@ int main() {
         trim(fileName);
 
         if (fileName.empty()) {
-            std::cout << "\033[1;31m[ERROR] Usage: echo <text> > <file>\033[0m\n";
+            CommandManager::printError("Usage: echo <text> > <file>");
             return;
         }
 
         std::ofstream file(fileName, append ? std::ios::app : std::ios::trunc);
 
         if (!file) {
-            std::cout << "\033[1;31m[ERROR] Could not open file: " << fileName << "\033[0m\n";
+            CommandManager::printError("Could not open file: " + fileName);
             return;
         }
 
@@ -396,17 +390,15 @@ int main() {
         if (!optional) return;
 
         const std::string& path = *optional;
+        std::error_code ec;
+        const auto status = fs::status(path, ec);
 
-        if (!fs::exists(path)) {
+        if (ec || !fs::exists(path)) {
             CommandManager::printError("File doesn't exist: " + path);
             return;
         }
 
-        std::error_code ec;
-
-        const auto status = fs::status(path, ec);
-
-        std::cout << "\033[1;36m";
+        std::cout << color::cyan;
         std::cout << "Path:        " << fs::absolute(path).string() << "\n";
         std::cout << "Type:        " << CommandManager::fileTypeToString(status.type()) << "\n";
 
@@ -416,16 +408,16 @@ int main() {
 
         std::cout << "Permissions: " << CommandManager::permissionsToString(status.permissions()) << "\n";
         std::cout << "Modified:    " << std::format("{:%Y-%m-%d %H:%M:%S}", fs::last_write_time(path, ec)) << "\n";
-        std::cout << "\033[0m";
+        std::cout << color::reset;
     });
 
     cmd.registerCommand("pwd", [](std::istringstream&) {
-        std::cout << "\033[1;36m" << fs::current_path() << "\033[0m\n";
+        CommandManager::printInfo(fs::current_path().string());
     });
 
     cmd.registerCommand("secret", [](std::istringstream&) {
         const std::vector<std::string> lines = {
-            "I", "\033[1;31m<3\033[0m", "you"
+            "I", std::string(color::red) + "<3" + std::string(color::reset), "you"
         };
 
         for (const auto& line : lines) {
@@ -435,41 +427,48 @@ int main() {
     });
 
     cmd.registerCommand("help", [](std::istringstream&) {
-        std::cout << "\n\033[1;33m=== Available commands ===\033[0m\n";
-        std::cout << "  ls                       - List contents of current directory\n";
-        std::cout << "  pwd                      - Print working directory path\n";
-        std::cout << "  cd <path>                - Change current directory\n";
-        std::cout << "  mkdir <dir_name>         - Create a new directory\n";
-        std::cout << "  rm <name>                - Remove file or directory\n";
-        std::cout << "  cp <src> <dest>          - Copy file or directory\n";
-        std::cout << "  cat <file_name>          - Display file contents\n";
-        std::cout << "  echo <text> [>/>> <file>] - Print text or redirect to a file\n";
-        std::cout << "  grep <pattern> <file>    - Search text pattern in file\n";
-        std::cout << "  find <name>              - Search files by name recursively\n";
-        std::cout << "  tree                     - Show directories and files as a tree\n";
-        std::cout << "  touch <file_name>        - Create an empty file or update its last write time\n";
-        std::cout << "  wc <file_name>           - Count the number of lines, words and characters in a file\n";
-        std::cout << "  secret                   - Secret command\n";
-        std::cout << "  exit                     - Exit the application\n";
-        std::cout << "\033[1;33m==========================\033[0m\n\n";
+        const std::vector<std::pair<std::string_view, std::string_view>> commands = {
+            {"ls",                        "List contents of current directory"},
+            {"pwd",                       "Print working directory path"},
+            {"cd <path>",                 "Change current directory"},
+            {"mkdir <dir_name>",          "Create a new directory"},
+            {"rm <name>",                 "Remove file or directory"},
+            {"cp <src> <dest>",           "Copy file or directory"},
+            {"cat <file_name>",           "Display file contents"},
+            {"echo <text> [>/>> <file>]", "Print text or redirect to a file"},
+            {"grep <pattern> <file>",     "Search text pattern in file"},
+            {"find <name>",               "Search files by name recursively"},
+            {"tree",                      "Show directories and files as a tree"},
+            {"touch <file_name>",         "Create an empty file or update its last write time"},
+            {"wc <file_name>",            "Count lines, words and characters in a file"},
+            {"stat <path>",               "Show type, size, permissions and last modification time"},
+            {"secret",                    "Secret command"},
+            {"exit",                      "Exit the application"},
+        };
+
+        std::cout << "\n" << color::yellow << "=== Available commands ===" << color::reset << "\n";
+        for (const auto& [usage, description] : commands) {
+            std::cout << std::format("  {:<27}- {}\n", usage, description);
+        }
+        std::cout << color::yellow << "==========================" << color::reset << "\n\n";
     });
 
     cmd.registerCommand("exit", [&running](std::istringstream&) {
-        std::cout << "\033[1;32mBye!\033[0m\n";
+        CommandManager::printSuccess("Bye!");
         running = false;
     });
 
     std::string input;
 
-    std::cout << "\033[1;33m";
+    std::cout << color::yellow;
     std::cout << "  __\n";
     std::cout << ">(o )___  Welcome to file system!\n";
     std::cout << " ( ._> /  Type \"help\" for more info\n";
     std::cout << "  `---'\n\n";
-    std::cout << "\033[0m";
+    std::cout << color::reset;
 
     while (running) {
-        std::cout << "\033[1;32m" << fs::current_path() << "\033[1;33m $ \033[0m";
+        std::cout << color::green << fs::current_path().string() << color::yellow << " $ " << color::reset;
         if (!std::getline(std::cin, input)) break;
         if (input.empty()) continue;
 
@@ -480,7 +479,7 @@ int main() {
         try {
             cmd.execute(command, ss);
         } catch (std::exception& e) {
-            std::cout << "\033[1;31m[ERROR] " << e.what() << "\033[0m\n";
+            CommandManager::printError(e.what());
         }
     }
 
