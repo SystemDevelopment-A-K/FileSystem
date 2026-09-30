@@ -44,6 +44,43 @@ namespace {
 
             std::cout << line.substr(pos) << "\n";
         }
+
+        static void printError(const std::string& message) {
+            std::cout << "\033[1;31m[ERROR] " << message << "\033[0m\n";
+        }
+
+        static void printSuccess(const std::string& msg) {
+            std::cout << "\033[1;32m[SUCCESS] " << msg << "\033[0m\n";
+        }
+
+        static std::optional<std::string> readArguments(std::istringstream& args, const std::string& errorMessage) {
+            std::string value;
+            if (!(args >> value)) {
+                printError(errorMessage);
+                return std::nullopt;
+            }
+            return value;
+        }
+
+        static std::string permissionsToString(fs::perms p) {
+            auto bit = [p](const fs::perms flag, char c) {
+                return (p & flag) != fs::perms::none ? c : '-';
+            };
+
+            std::string result;
+
+            result += bit(fs::perms::owner_read,  'r');
+            result += bit(fs::perms::owner_write, 'w');
+            result += bit(fs::perms::owner_exec,  'x');
+
+            result += bit(fs::perms::group_read,  'r');
+            result += bit(fs::perms::group_write, 'w');
+            result += bit(fs::perms::group_exec,  'x');
+
+            result += bit(fs::perms::others_read,  'r');
+            result += bit(fs::perms::others_write, 'w');
+            result += bit(fs::perms::others_exec,  'x');
+        }
     private:
         std::unordered_map<std::string, CommandFunc> commands;
     };
@@ -71,15 +108,11 @@ int main() {
     });
 
     cmd.registerCommand("mkdir", [](std::istringstream& args) {
-        std::string folderName;
-        args >> folderName;
+        const auto folderName = CommandManager::readArguments(args, "You forgot to specify directory name!");
 
-        if (folderName.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify directory name!\033[0m\n";
-            return;
-        }
+        if (!folderName) return;
 
-        if (std::error_code ec; fs::create_directory(folderName, ec)) {
+        if (std::error_code ec; fs::create_directory(*folderName, ec)) {
             std::cout << "\033[1;32m[OK] Directory successfully created!\033[0m\n";
         } else if (ec) {
             std::cout << "\033[1;31m[ERROR] Directory creation failed: " << ec.message() << "\033[0m\n";
@@ -106,15 +139,11 @@ int main() {
     });
 
     cmd.registerCommand("rm", [](std::istringstream& args) {
-        std::string target;
-        args >> target;
+        const auto target = CommandManager::readArguments(args, "You forgot to specify directory or file name!");
 
-        if (target.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify directory or file name!\033[0m\n";
-            return;
-        }
+        if (!target) return;
 
-        if (std::error_code ec; fs::remove(target, ec)) {
+        if (std::error_code ec; fs::remove(*target, ec)) {
             std::cout << "\033[1;32m[OK] Item successfully removed!\033[0m\n";
         } else if (ec) {
             std::cout << "\033[1;31m[ERROR] Failed to remove item: " << ec.message() << "\033[0m\n";
@@ -124,22 +153,17 @@ int main() {
     });
 
     cmd.registerCommand("touch", [](std::istringstream& args) {
-        std::string fileName;
-        args >> fileName;
+        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (fileName.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
-            return;
-        }
+        if (!optional) return;
 
+        const std::string& fileName = *optional;
         std::error_code ec;
 
         if (fs::exists(fileName, ec)) {
             fs::last_write_time(fileName, fs::file_time_type::clock::now(), ec);
         } else {
-            std::ofstream file(fileName);
-
-            if (!file) {
+            if (const std::ofstream file(fileName); !file) {
                 std::cout << "\033[1;31m[ERROR] Failed to create file: " << fileName << "\033[0m\n";
                 return;
             }
@@ -153,13 +177,11 @@ int main() {
     });
 
     cmd.registerCommand("cat", [](std::istringstream& args) {
-        std::string fileName;
-        args >> fileName;
+        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (fileName.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
-            return;
-        }
+        if (!optional) return;
+
+        const std::string& fileName = *optional;
 
         std::ifstream file(fileName);
 
@@ -221,16 +243,12 @@ int main() {
     });
 
     cmd.registerCommand("find", [](std::istringstream& args) {
-        std::string search;
-        args >> search;
+        const auto optional = CommandManager::readArguments(args, "You forgot to specify search query!");
 
-        if (search.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify search query!\033[0m\n";
-            return;
-        }
+        if (!optional) return;
 
         for (const auto& entry : fs::recursive_directory_iterator(fs::current_path(), fs::directory_options::skip_permission_denied)) {
-            if (entry.path().filename().string().find(search) != std::string::npos) {
+            if (entry.path().filename().string().find(*optional) != std::string::npos) {
                 std::cout << "\033[1;36m" << entry.path() << "\033[0m\n";
             }
         }
@@ -265,13 +283,11 @@ int main() {
     });
 
     cmd.registerCommand("wc", [](std::istringstream& args) {
-        std::string fileName;
-        args >> fileName;
+        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (fileName.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
-            return;
-        }
+        if (!optional) return;
+
+        const std::string& fileName = *optional;
 
         std::ifstream file(fileName);
 
@@ -306,7 +322,7 @@ int main() {
         auto trim = [](std::string& s) {
             const size_t start = s.find_first_not_of(" \t");
             const size_t end = s.find_last_not_of(" \t");
-            s = (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+            s = start == std::string::npos ? "" : s.substr(start, end - start + 1);
         };
 
         bool append = false;
@@ -345,16 +361,14 @@ int main() {
     });
 
     cmd.registerCommand("stat", [](std::istringstream& args) {
-        std::string path;
-        args >> path;
+        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (path.empty()) {
-            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
-            return;
-        }
+        if (!optional) return;
+
+        const std::string& path = *optional;
 
         if (!fs::exists(path)) {
-            std::cout << "\033[1;31m[ERROR] File doesn't exist: " << path << "\033[0m\n";
+            CommandManager::printError("File doesn't exist: " + path);
             return;
         }
     });
