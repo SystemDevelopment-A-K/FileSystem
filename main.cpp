@@ -52,7 +52,7 @@ namespace {
 
             while ((found = line.find(pattern, pos)) != std::string::npos) {
                 std::cout << line.substr(pos, found - pos);
-                std::cout << "\033[1;33m" << pattern << "\033[0m";
+                std::cout << color::yellow << pattern << color::reset;
                 pos = found + pattern.length();
             }
 
@@ -156,12 +156,12 @@ int main() {
     });
 
     cmd.registerCommand("cd", [](std::istringstream& args) {
-        const auto optional = CommandManager::readArguments(args, "You forgot to specify directory name!");
+        const auto path = CommandManager::readArguments(args, "You forgot to specify directory name!");
 
-        if (!optional) return;
+        if (!path) return;
 
         std::error_code ec;
-        fs::current_path(*optional, ec);
+        fs::current_path(*path, ec);
 
         if (ec) {
             CommandManager::printError("Failed to change directory: " + ec.message());
@@ -183,11 +183,11 @@ int main() {
     });
 
     cmd.registerCommand("touch", [](std::istringstream& args) {
-        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
+        const auto result = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (!optional) return;
+        if (!result) return;
 
-        const std::string& fileName = *optional;
+        const std::string& fileName = *result;
         std::error_code ec;
 
         if (fs::exists(fileName, ec)) {
@@ -205,16 +205,16 @@ int main() {
     });
 
     cmd.registerCommand("cat", [](std::istringstream& args) {
-        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
+        const auto result = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (!optional) return;
+        if (!result) return;
 
-        const std::string& fileName = *optional;
+        const std::string& fileName = *result;
 
         std::ifstream file(fileName);
 
         if (!file) {
-            std::cout << "\033[1;31m[ERROR] Could not open file: " << fileName << "\033[0m\n";
+            CommandManager::printError("Could not open file: " + fileName);
             return;
         }
 
@@ -225,17 +225,15 @@ int main() {
     });
 
     cmd.registerCommand("grep", [](std::istringstream& args) {
-        std::string pattern, fileName;
-        args >> pattern >> fileName;
+        const auto pattern = CommandManager::readArguments(args, "Usage: grep <pattern> <file>");
+        if (!pattern) return;
 
-        if (pattern.empty() || fileName.empty()) {
-            std::cout << "\033[1;31m[ERROR] Usage: grep <pattern> <file>\033[0m\n";
-            return;
-        }
+        const auto fileName = CommandManager::readArguments(args, "Usage: grep <pattern> <file>");
+        if (!fileName) return;
 
-        std::ifstream file(fileName);
+        std::ifstream file(*fileName);
         if (!file) {
-            std::cout << "\033[1;31m[ERROR] Could not open file: " << fileName << "\033[0m\n";
+            CommandManager::printError("Could not open file: " + *fileName);
             return;
         }
 
@@ -244,9 +242,9 @@ int main() {
 
         while (std::getline(file, line)) {
             lineNumber++;
-            if (line.find(pattern) != std::string::npos) {
+            if (line.find(*pattern) != std::string::npos) {
                 std::cout << "\033[90m" << lineNumber << ": \033[0m";
-                CommandManager::printHighlighted(line, pattern);
+                CommandManager::printHighlighted(line, *pattern);
             }
         }
     });
@@ -275,7 +273,7 @@ int main() {
 
         for (const auto& entry : fs::recursive_directory_iterator(fs::current_path(), fs::directory_options::skip_permission_denied)) {
             if (entry.path().filename().string().find(*search) != std::string::npos) {
-                std::cout << "\033[1;36m" << entry.path() << "\033[0m\n";
+                std::cout << color::cyan << entry.path().string() << color::reset << "\n";
             }
         }
     });
@@ -309,11 +307,11 @@ int main() {
     });
 
     cmd.registerCommand("wc", [](std::istringstream& args) {
-        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
+        const auto result = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (!optional) return;
+        if (!result) return;
 
-        const std::string& fileName = *optional;
+        const std::string& fileName = *result;
 
         std::ifstream file(fileName);
 
@@ -385,15 +383,15 @@ int main() {
     });
 
     cmd.registerCommand("stat", [](std::istringstream& args) {
-        const auto optional = CommandManager::readArguments(args, "You forgot to specify file name!");
+        const auto result = CommandManager::readArguments(args, "You forgot to specify file name!");
 
-        if (!optional) return;
+        if (!result) return;
 
-        const std::string& path = *optional;
+        const std::string& path = *result;
         std::error_code ec;
         const auto status = fs::status(path, ec);
 
-        if (ec || !fs::exists(path)) {
+        if (ec || !fs::exists(status)) {
             CommandManager::printError("File doesn't exist: " + path);
             return;
         }
