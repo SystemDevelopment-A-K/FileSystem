@@ -136,8 +136,15 @@ int main() {
                 std::cout << color::gray << " (" << entry.file_size() << " bytes)" << color::reset;
             }
 
-            std::cout << color::gray << " [" << std::format("{:%Y-%m-%d %H:%M}", entry.last_write_time()) << "]"
-                        << color::reset << "\n";
+            std::error_code ec;
+            const auto time = entry.last_write_time(ec);
+
+            if (!ec) {
+                std::cout << color::gray << " [" << std::format("{:%Y-%m-%d %H:%M}", time) << "]"
+                            << color::reset;
+            }
+
+            std::cout << "\n";
         }
     });
 
@@ -243,7 +250,7 @@ int main() {
         while (std::getline(file, line)) {
             lineNumber++;
             if (line.find(*pattern) != std::string::npos) {
-                std::cout << "\033[90m" << lineNumber << ": \033[0m";
+                std::cout << color::gray << lineNumber << ": " << color::reset;
                 CommandManager::printHighlighted(line, *pattern);
             }
         }
@@ -257,7 +264,7 @@ int main() {
         if (!destination) return;
 
         std::error_code ec;
-        fs::copy(*source, *destination, fs::copy_options::overwrite_existing, ec);
+        fs::copy(*source, *destination, fs::copy_options::overwrite_existing | fs::copy_options::recursive, ec);
 
         if (ec) {
             CommandManager::printError("Failed to copy: " + ec.message());
@@ -296,7 +303,7 @@ int main() {
                 std::cout << color::gray << prefix << (isLast ? "└── " : "├── ") << color::reset
                             << nameColor << entry.path().filename().string() << color::reset << "\n";
 
-                if (entry.is_directory()) {
+                if (entry.is_directory() && !entry.is_symlink()) {
                     std::string newPrefix = prefix + (isLast ? "    " : "│   ");
                     printTree(entry.path(), newPrefix);
                 }
@@ -316,7 +323,7 @@ int main() {
         std::ifstream file(fileName);
 
         if (!file) {
-            std::cout << "\033[1;31m[ERROR] Could not open file: " << fileName << "\033[0m\n";
+            CommandManager::printError("Could not open file: " + fileName);
             return;
         }
 
@@ -391,7 +398,12 @@ int main() {
         std::error_code ec;
         const auto status = fs::status(path, ec);
 
-        if (ec || !fs::exists(status)) {
+        if (ec) {
+            CommandManager::printError("Cannot access " + path + ": " + ec.message());
+            return;
+        }
+
+        if (!fs::exists(status)) {
             CommandManager::printError("File doesn't exist: " + path);
             return;
         }
