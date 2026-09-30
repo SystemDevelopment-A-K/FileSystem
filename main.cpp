@@ -344,6 +344,21 @@ int main() {
         file << text << "\n";
     });
 
+    cmd.registerCommand("stat", [](std::istringstream& args) {
+        std::string path;
+        args >> path;
+
+        if (path.empty()) {
+            std::cout << "\033[1;31m[ERROR] You forgot to specify file name!\033[0m\n";
+            return;
+        }
+
+        if (!fs::exists(path)) {
+            std::cout << "\033[1;31m[ERROR] File doesn't exist: " << path << "\033[0m\n";
+            return;
+        }
+    });
+
     cmd.registerCommand("pwd", [](std::istringstream&) {
         std::cout << "\033[1;36m" << fs::current_path() << "\033[0m\n";
     });
